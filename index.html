@@ -48,7 +48,10 @@ label.f{display:block;font-size:14px;font-weight:700;color:var(--sub);margin:14p
 </head>
 <body>
 <div class="wrap" id="app"></div>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
+var FIREBASE_CONFIG={apiKey:"AIzaSyCAogkA73VW6nb_qzDDGxiuRq4TDkQlpqM",authDomain:"menulog-f4567.firebaseapp.com",projectId:"menulog-f4567",appId:"1:324044956423:web:0f8781cee83756f2c91ba2"};
 var PEOPLE=["이은주","이수미","김현희","한미경","김규리"];
 var MEALS=["조","중","석"];
 window.alert=function(m){var t=document.createElement("div");t.textContent=m;t.style.cssText="position:fixed;left:16px;right:16px;bottom:calc(20px + env(safe-area-inset-bottom,0px));background:#2b2622;color:#fff;padding:14px;border-radius:12px;text-align:center;z-index:99";document.body.appendChild(t);setTimeout(function(){t.remove()},2500)};
@@ -160,6 +163,13 @@ async function remove(){
 }
 
 render();
+function fireDb(){
+  firebase.initializeApp(FIREBASE_CONFIG);
+  var fs=firebase.firestore();
+  return{collection:function(n){var c=fs.collection(n);return{
+    doc:function(id){var r=id?c.doc(id):c.doc();return{id:r.id,set:function(d){return r.set(d)},delete:function(){return r.delete()}}},
+    onSnapshot:function(next,err){return c.onSnapshot(function(q){next({docs:q.docs.map(function(d){return{id:d.id,data:function(){return d.data()}}})})},err)}}}}
+}
 function localDb(){
   var K="menu-log-entries";
   function rd(){try{return JSON.parse(localStorage.getItem(K)||"{}")}catch(e){return{}}}
@@ -173,7 +183,9 @@ function localDb(){
 (async function(){
   try{
     if(window.claude&&claude.use){db=await claude.use("db")}
-    if(db){dbState="on"}else{db=localDb();dbState="local"}
+    if(db){dbState="on"}
+    else if(FIREBASE_CONFIG.projectId&&window.firebase){db=fireDb();dbState="on"}
+    else{db=localDb();dbState="local"}
     db.collection("entries").onSnapshot(function(snap){
       entries=snap.docs.map(function(d){var x=Object.assign({},d.data());x.id=d.id;return x});
       var typing=document.activeElement&&(document.activeElement.tagName==="INPUT"||document.activeElement.tagName==="TEXTAREA");
