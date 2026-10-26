@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>메뉴 기록장</title>
+<style>
+:root{--bg:#faf7f2;--card:#fff;--tx:#2b2622;--sub:#7a7068;--ac:#d9622b;--acs:#fbe6da;--bd:#e8e0d6;--danger:#c0392b;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1d1a17;--card:#292521;--tx:#f1ebe4;--sub:#a99e94;--ac:#f08a52;--acs:#4a3226;--bd:#3d3731;--danger:#ff7b6b}}
+:root[data-theme="dark"]{--bg:#1d1a17;--card:#292521;--tx:#f1ebe4;--sub:#a99e94;--ac:#f08a52;--acs:#4a3226;--bd:#3d3731;--danger:#ff7b6b}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:-apple-system,"Apple SD Gothic Neo","Noto Sans KR","Malgun Gothic",sans-serif;font-size:16px;line-height:1.5}
+.wrap{max-width:560px;margin:0 auto;padding:16px 16px 40px}
+h1{font-size:22px;margin:8px 0 14px}
+h2{font-size:18px;margin:0}
+.top{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+.back{border:0;background:var(--acs);color:var(--ac);font-size:15px;font-weight:700;padding:10px 14px;border-radius:12px}
+input,textarea{width:100%;font:inherit;color:var(--tx);background:var(--card);border:1.5px solid var(--bd);border-radius:12px;padding:12px;outline:none}
+input:focus,textarea:focus{border-color:var(--ac)}
+textarea{min-height:90px;resize:vertical}
+label.f{display:block;font-size:14px;font-weight:700;color:var(--sub);margin:14px 0 6px}
+.names{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:14px 0 20px}
+.name{border:0;background:var(--card);border:1.5px solid var(--bd);border-radius:16px;padding:22px 8px;font-size:18px;font-weight:700;color:var(--tx);text-align:center}
+.name small{display:block;font-size:13px;color:var(--sub);font-weight:400;margin-top:2px}
+.name:active{background:var(--acs)}
+.item{display:block;width:100%;text-align:left;background:var(--card);border:1.5px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:10px;color:var(--tx);font:inherit}
+.item:active{background:var(--acs)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.date{font-size:13px;color:var(--ac);font-weight:700}
+.menu{font-size:17px;font-weight:700;margin:2px 0}
+.tag{display:inline-block;font-size:12px;background:var(--acs);color:var(--ac);border-radius:20px;padding:2px 9px;margin-right:4px;font-weight:700}
+.who{font-size:13px;color:var(--sub)}
+.btn{width:100%;border:0;background:var(--ac);color:#fff;font:inherit;font-weight:700;padding:15px;border-radius:14px;margin-top:10px}
+.btn.sec{background:var(--acs);color:var(--ac)}
+.btn.del{background:transparent;color:var(--danger);border:1.5px solid var(--danger)}
+.meals{display:flex;gap:8px}
+.meals label{flex:1;text-align:center;border:1.5px solid var(--bd);background:var(--card);border-radius:12px;padding:12px 0;font-weight:700;cursor:pointer}
+.meals input{display:none}
+.meals input:checked+span{color:var(--ac)}
+.meals label:has(input:checked){background:var(--acs);border-color:var(--ac)}
+.empty{text-align:center;color:var(--sub);padding:30px 0}
+.box{background:var(--card);border:1.5px solid var(--bd);border-radius:14px;padding:14px;margin-bottom:10px;white-space:pre-wrap;word-break:break-word}
+.box b{display:block;font-size:13px;color:var(--sub);margin-bottom:4px}
+.sec-t{font-size:14px;font-weight:700;color:var(--sub);margin:18px 0 8px}
+.warn{background:var(--acs);color:var(--ac);padding:12px;border-radius:12px;font-size:14px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+<script>
+var PEOPLE=["이은주","이수미","김현희","한미경","김규리"];
+var MEALS=["조","중","석"];
+window.alert=function(m){var t=document.createElement("div");t.textContent=m;t.style.cssText="position:fixed;left:16px;right:16px;bottom:calc(20px + env(safe-area-inset-bottom,0px));background:#2b2622;color:#fff;padding:14px;border-radius:12px;text-align:center;z-index:99";document.body.appendChild(t);setTimeout(function(){t.remove()},2500)};
+var entries=[],state={v:"home",p:null,id:null,q:""},db=null,dbState="loading",canWrite=true;
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return{"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]})}
+function today(){var d=new Date();return d.getFullYear()+"-"+("0"+(d.getMonth()+1)).slice(-2)+"-"+("0"+d.getDate()).slice(-2)}
+function fmt(s){if(!s)return"";var a=s.split("-");return a[0]+"."+a[1]+"."+a[2]}
+function byPerson(p){return entries.filter(function(e){return e.person===p}).sort(function(a,b){return b.date.localeCompare(a.date)||(b.ts||0)-(a.ts||0)})}
+function tags(m){return(m||[]).map(function(x){return'<span class="tag">'+esc(x)+'</span>'}).join("")}
+function go(v,p,id){state.cd=false;state.v=v;if(p!==undefined)state.p=p;state.id=id||null;render();window.scrollTo(0,0)}
+
+function itemHtml(e,showWho){
+  return'<button class="item" data-open="'+esc(e.id)+'"><div class="row"><span class="date">'+fmt(e.date)+'</span><span>'+tags(e.meals)+'</span></div><div class="menu">'+esc(e.menu)+'</div>'+(showWho?'<div class="who">작성: '+esc(e.person)+'</div>':'')+'</button>';
+}
+
+function home(){
+  var h='<h1>🍲 메뉴 기록장</h1>';
+  if(dbState==="off")h+='<div class="warn">저장소에 연결되지 않아 기록이 저장되지 않을 수 있어요. 로그인 상태에서 다시 열어 주세요.</div>';
+  if(dbState==="local")h+='<div class="warn">이 기기(브라우저)에만 저장돼요. 다른 사람 휴대폰과는 공유되지 않아요.</div>';
+  h+='<input id="q" type="search" placeholder="메뉴명 검색 (예: 미역국)" value="'+esc(state.q)+'">';
+  h+='<div id="res"></div>';
+  h+='<div class="sec-t">이름을 눌러 기록하기</div><div class="names">';
+  PEOPLE.forEach(function(n){h+='<button class="name" data-p="'+n+'">'+n+'<small>'+byPerson(n).length+'개 기록</small></button>'});
+  return h+'</div>';
+}
+function searchRes(){
+  var q=state.q.trim().toLowerCase(),box=document.getElementById("res");if(!box)return;
+  if(!q){box.innerHTML="";return}
+  var r=entries.filter(function(e){return(e.menu||"").toLowerCase().indexOf(q)>-1}).sort(function(a,b){return b.date.localeCompare(a.date)});
+  box.innerHTML='<div class="sec-t">검색 결과 '+r.length+'건</div>'+(r.length?r.map(function(e){return itemHtml(e,true)}).join(""):'<div class="empty">검색된 메뉴가 없어요</div>');
+}
+
+function person(){
+  var list=byPerson(state.p);
+  var h='<div class="top"><button class="back" data-go="home">← 처음</button><h2>'+esc(state.p)+'님의 기록</h2></div>';
+  h+='<button class="btn" data-new="1" style="margin:0 0 16px">＋ 새 메뉴 작성</button>';
+  h+=list.length?list.map(function(e){return itemHtml(e,false)}).join(""):'<div class="empty">아직 작성한 기록이 없어요</div>';
+  return h;
+}
+
+function form(){
+  var e=state.id?entries.filter(function(x){return x.id===state.id})[0]:null;
+  e=e||{date:today(),menu:"",meals:[],method:"",caution:""};
+  var h='<div class="top"><button class="back" data-back="1">← 취소</button><h2>'+(state.id?"기록 수정":"새 메뉴 작성")+'</h2></div>';
+  h+='<label class="f">날짜</label><input type="date" id="f-date" value="'+esc(e.date)+'">';
+  h+='<label class="f">메뉴명</label><input id="f-menu" placeholder="메뉴 이름" value="'+esc(e.menu)+'">';
+  h+='<label class="f">조 · 중 · 석</label><div class="meals">';
+  MEALS.forEach(function(m){h+='<label><input type="checkbox" name="meal" value="'+m+'"'+(e.meals.indexOf(m)>-1?" checked":"")+'><span>'+m+'</span></label>'});
+  h+='</div><label class="f">조리방법</label><textarea id="f-method" placeholder="조리 방법을 적어 주세요">'+esc(e.method)+'</textarea>';
+  h+='<label class="f">주의점</label><textarea id="f-caution" placeholder="주의할 점을 적어 주세요">'+esc(e.caution)+'</textarea>';
+  h+='<button class="btn" data-save="1">저장하기</button>';
+  return h;
+}
+
+function detail(){
+  var e=entries.filter(function(x){return x.id===state.id})[0];
+  if(!e)return'<div class="top"><button class="back" data-back="1">← 뒤로</button></div><div class="empty">기록을 찾을 수 없어요</div>';
+  var h='<div class="top"><button class="back" data-back="1">← 뒤로</button><h2>'+fmt(e.date)+'</h2></div>';
+  h+='<div class="who" style="margin-bottom:6px">작성: '+esc(e.person)+'</div><div class="menu" style="font-size:22px">'+esc(e.menu)+'</div><div style="margin:6px 0 14px">'+tags(e.meals)+'</div>';
+  h+='<div class="box"><b>조리방법</b>'+(esc(e.method)||"-")+'</div><div class="box"><b>주의점</b>'+(esc(e.caution)||"-")+'</div>';
+  h+='<button class="btn sec" data-edit="1">수정하기</button>'+(state.cd?'<div class="warn" style="margin-top:10px">이 기록을 정말 삭제할까요? 삭제하면 되돌릴 수 없어요.</div><button class="btn del" data-del="1">네, 삭제할게요</button><button class="btn sec" data-cancel="1">취소</button>':'<button class="btn del" data-del="1">삭제하기</button>');
+  return h;
+}
+
+var prev={v:"home",p:null};
+function render(){
+  var app=document.getElementById("app");
+  app.innerHTML=state.v==="home"?home():state.v==="person"?person():state.v==="form"?form():detail();
+  if(state.v==="home")searchRes();
+}
+
+document.addEventListener("input",function(ev){
+  if(ev.target.id==="q"){state.q=ev.target.value;searchRes()}
+});
+document.addEventListener("click",function(ev){
+  var t=ev.target.closest("button");if(!t)return;
+  var d=t.dataset;
+  if(d.p){go("person",d.p)}
+  else if(d.go){go("home")}
+  else if(d.open){prev={v:state.v,p:state.p};var e=entries.filter(function(x){return x.id===d.open})[0];go("detail",e?e.person:state.p,d.open)}
+  else if(d["new"]){prev={v:"person",p:state.p};go("form",state.p,null)}
+  else if(d.back){var pv=state.v==="form"&&state.id?{v:"detail"}:prev;if(state.v==="form"&&state.id){go("detail",state.p,state.id)}else if(pv.v==="home"){go("home")}else{go("person",state.p)}}
+  else if(d.edit){go("form",state.p,state.id)}
+  else if(d.save){save()}
+  else if(d.del){if(!state.cd){state.cd=true;render()}else{remove()}}else if(d.cancel){state.cd=false;render()}
+});
+
+async function save(){
+  var date=document.getElementById("f-date").value,menu=document.getElementById("f-menu").value.trim();
+  if(!date||!menu){alert("날짜와 메뉴명을 입력해 주세요.");return}
+  if(!db){alert("저장소에 연결되지 않았어요.");return}
+  var meals=[].slice.call(document.querySelectorAll('input[name="meal"]:checked')).map(function(x){return x.value});
+  var data={person:state.p,date:date,menu:menu,meals:meals,method:document.getElementById("f-method").value.trim(),caution:document.getElementById("f-caution").value.trim(),ts:Date.now()};
+  try{
+    var ref=state.id?db.collection("entries").doc(state.id):db.collection("entries").doc();
+    await ref.set(data);
+    var id=ref.id;
+    entries=entries.filter(function(x){return x.id!==id});
+    data.id=id;entries.push(data);
+    prev={v:"person",p:state.p};
+    go("person",state.p);
+  }catch(err){alert("저장하지 못했어요. 잠시 후 다시 시도해 주세요.")}
+}
+async function remove(){
+  state.cd=false;
+  try{await db.collection("entries").doc(state.id).delete();entries=entries.filter(function(x){return x.id!==state.id});go("person",state.p)}
+  catch(err){alert("삭제하지 못했어요.")}
+}
+
+render();
+function localDb(){
+  var K="menu-log-entries";
+  function rd(){try{return JSON.parse(localStorage.getItem(K)||"{}")}catch(e){return{}}}
+  function wr(a){localStorage.setItem(K,JSON.stringify(a))}
+  return{collection:function(){return{
+    doc:function(id){id=id||("l"+Date.now()+Math.random().toString(36).slice(2,7));return{id:id,
+      set:async function(d){var a=rd();a[id]=d;wr(a)},
+      delete:async function(){var a=rd();delete a[id];wr(a)}}},
+    onSnapshot:function(next){var a=rd();next({docs:Object.keys(a).map(function(k){return{id:k,data:function(){return a[k]}}})});return function(){}}}}}
+}
+(async function(){
+  try{
+    if(window.claude&&claude.use){db=await claude.use("db")}
+    if(db){dbState="on"}else{db=localDb();dbState="local"}
+    db.collection("entries").onSnapshot(function(snap){
+      entries=snap.docs.map(function(d){var x=Object.assign({},d.data());x.id=d.id;return x});
+      var typing=document.activeElement&&(document.activeElement.tagName==="INPUT"||document.activeElement.tagName==="TEXTAREA");
+      if(state.v==="form"&&typing)return;
+      render();
+    },function(){dbState="off";render()});
+  }catch(err){dbState="off";render()}
+})();
+</script>
+</body>
+</html>
