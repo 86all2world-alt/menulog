@@ -52,7 +52,8 @@ label.f{display:block;font-size:14px;font-weight:700;color:var(--sub);margin:14p
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 <script>
 var FIREBASE_CONFIG={apiKey:"AIzaSyCAogkA73VW6nb_qzDDGxiuRq4TDkQlpqM",authDomain:"menulog-f4567.firebaseapp.com",projectId:"menulog-f4567",appId:"1:324044956423:web:0f8781cee83756f2c91ba2"};
-var PEOPLE=["이은주","이수미","김현희","한미경","김규리"];
+var EDIT_PASSWORD="1234";
+var PEOPLE=["이은주","이수미","김현희","한미경","김규리","",""];
 var MEALS=["조","중","석"];
 window.alert=function(m){var t=document.createElement("div");t.textContent=m;t.style.cssText="position:fixed;left:16px;right:16px;bottom:calc(20px + env(safe-area-inset-bottom,0px));background:#2b2622;color:#fff;padding:14px;border-radius:12px;text-align:center;z-index:99";document.body.appendChild(t);setTimeout(function(){t.remove()},2500)};
 var entries=[],state={v:"home",p:null,id:null,q:""},db=null,dbState="loading",canWrite=true;
@@ -74,9 +75,18 @@ function home(){
   if(dbState==="local")h+='<div class="warn">이 기기(브라우저)에만 저장돼요. 다른 사람 휴대폰과는 공유되지 않아요.</div>';
   h+='<input id="q" type="search" placeholder="메뉴명 검색 (예: 미역국)" value="'+esc(state.q)+'">';
   h+='<div id="res"></div>';
+  if(state.askpw){return h+'<div class="sec-t">이름 수정 비밀번호</div><input id="pw-in" type="password" placeholder="비밀번호 입력" autocomplete="off"><button class="btn" data-checkpw="1">확인</button><button class="btn sec" data-cancelpw="1">취소</button>'}
+  if(state.edit){
+    h+='<div class="sec-t">이름 수정 (비워 두면 칸이 비어 있어요)</div><div class="names">';
+    PEOPLE.forEach(function(n,i){h+='<input class="nm-in" data-i="'+i+'" maxlength="12" placeholder="이름 입력" value="'+esc(n)+'" style="text-align:center;font-weight:700;padding:20px 8px">'});
+    return h+'</div><button class="btn" data-savenames="1">이름 저장</button><button class="btn sec" data-cancelnames="1">취소</button>';
+  }
   h+='<div class="sec-t">이름을 눌러 기록하기</div><div class="names">';
-  PEOPLE.forEach(function(n){h+='<button class="name" data-p="'+n+'">'+n+'<small>'+byPerson(n).length+'개 기록</small></button>'});
-  return h+'</div>';
+  PEOPLE.forEach(function(n){
+    if(n)h+='<button class="name" data-p="'+esc(n)+'">'+esc(n)+'<small>'+byPerson(n).length+'개 기록</small></button>';
+    else h+='<button class="name" data-editnames="1" style="color:var(--sub);border-style:dashed">＋ 이름 입력</button>';
+  });
+  return h+'</div><button class="btn sec" data-editnames="1">✏️ 이름 수정</button>';
 }
 function searchRes(){
   var q=state.q.trim().toLowerCase(),box=document.getElementById("res");if(!box)return;
@@ -131,6 +141,11 @@ document.addEventListener("click",function(ev){
   var t=ev.target.closest("button");if(!t)return;
   var d=t.dataset;
   if(d.p){go("person",d.p)}
+  else if(d.editnames){if(state.unlocked){state.edit=true}else{state.askpw=true}render()}
+  else if(d.checkpw){if(document.getElementById("pw-in").value===EDIT_PASSWORD){state.unlocked=true;state.askpw=false;state.edit=true;render()}else{alert("비밀번호가 맞지 않아요.")}}
+  else if(d.cancelpw){state.askpw=false;render()}
+  else if(d.cancelnames){state.edit=false;render()}
+  else if(d.savenames){saveNames()}
   else if(d.go){go("home")}
   else if(d.open){prev={v:state.v,p:state.p};var e=entries.filter(function(x){return x.id===d.open})[0];go("detail",e?e.person:state.p,d.open)}
   else if(d["new"]){prev={v:"person",p:state.p};go("form",state.p,null)}
@@ -140,6 +155,23 @@ document.addEventListener("click",function(ev){
   else if(d.del){if(!state.cd){state.cd=true;render()}else{remove()}}else if(d.cancel){state.cd=false;render()}
 });
 
+async function saveNames(){
+  if(!db){alert("저장소에 연결되지 않았어요.");return}
+  var vals=[].slice.call(document.querySelectorAll(".nm-in")).map(function(x){return x.value.trim()});
+  var used=vals.filter(Boolean);
+  if(used.some(function(v,i){return used.indexOf(v)!==i})){alert("같은 이름이 두 번 들어 있어요.");return}
+  var old=PEOPLE.slice();
+  try{
+    for(var i=0;i<vals.length;i++){
+      if(old[i]&&vals[i]&&old[i]!==vals[i]){
+        var mine=entries.filter(function(e){return e.person===old[i]});
+        for(var j=0;j<mine.length;j++){var d=Object.assign({},mine[j]);var id=d.id;delete d.id;d.person=vals[i];await db.collection("entries").doc(id).set(d)}
+      }
+    }
+    await db.collection("entries").doc("_names").set({names:vals,ts:Date.now()});
+    PEOPLE=vals;state.edit=false;render();
+  }catch(err){alert("이름을 저장하지 못했어요. 잠시 후 다시 시도해 주세요.")}
+}
 async function save(){
   var date=document.getElementById("f-date").value,menu=document.getElementById("f-menu").value.trim();
   if(!date||!menu){alert("날짜와 메뉴명을 입력해 주세요.");return}
@@ -187,9 +219,11 @@ function localDb(){
     else if(FIREBASE_CONFIG.projectId&&window.firebase){db=fireDb();dbState="on"}
     else{db=localDb();dbState="local"}
     db.collection("entries").onSnapshot(function(snap){
-      entries=snap.docs.map(function(d){var x=Object.assign({},d.data());x.id=d.id;return x});
+      var nd=snap.docs.filter(function(d){return d.id==="_names"})[0];
+      if(nd&&nd.data().names)PEOPLE=nd.data().names;
+      entries=snap.docs.filter(function(d){return d.id!=="_names"}).map(function(d){var x=Object.assign({},d.data());x.id=d.id;return x});
       var typing=document.activeElement&&(document.activeElement.tagName==="INPUT"||document.activeElement.tagName==="TEXTAREA");
-      if(state.v==="form"&&typing)return;
+      if((state.v==="form"||state.edit||state.askpw)&&typing)return;
       render();
     },function(){dbState="off";render()});
   }catch(err){dbState="off";render()}
